@@ -1,92 +1,110 @@
 import React, { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
-import { Bot, User, Send, LoaderCircle } from 'lucide-react';
+import { Bot, Send } from 'lucide-react';
 
 const ChatbotPage = () => {
-    const [messages, setMessages] = useState([
-        { sender: 'bot', text: 'Olá! Sou o assistente de IA da BlauSight. Como posso ajudar você a analisar um desvio hoje?' }
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const messagesEndRef = useRef(null);
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+  
+  useEffect(() => {
+    // Mensagem inicial do bot
+    setMessages([
+      {
+        text: "Olá! Eu sou o assistente virtual da BlauSight. Como posso te ajudar a analisar os desvios hoje?",
+        sender: "bot"
+      }
     ]);
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const messagesEndRef = useRef(null);
+  }, []);
 
-    const API_URL = 'http://localhost:8000/api';
+  const handleSend = async () => {
+    if (input.trim() === '') return;
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const userMessage = { text: input, sender: 'user' };
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+
+    try {
+      const response = await fetch(`${apiUrl}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: input }),
+      });
+
+      if (!response.ok) {
+        throw new Error('A resposta da rede não foi ok');
+      }
+
+      const data = await response.json();
+      const botMessage = { text: data.reply, sender: 'bot' };
+      setMessages(prev => [...prev, botMessage]);
+
+    } catch (error) {
+      console.error("Erro ao contatar a API do chat:", error);
+      const errorMessage = { text: "Desculpe, estou com problemas para me conectar ao servidor. Tente novamente mais tarde.", sender: 'bot' };
+      setMessages(prev => [...prev, errorMessage]);
     }
+  };
 
-    useEffect(scrollToBottom, [messages]);
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSend();
+    }
+  };
 
-    const handleSend = async () => {
-        if (input.trim() === '' || loading) return;
-
-        const userMessage = { sender: 'user', text: input };
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
-        setLoading(true);
-
-        try {
-            // AINDA NÃO IMPLEMENTADO NO BACKEND
-            // const response = await axios.post(`${API_URL}/chat`, { query: input });
-            // const botResponse = { sender: 'bot', text: response.data.reply };
-            
-            // ---- RESPOSTA SIMULADA (REMOVER DEPOIS) ----
-            await new Promise(res => setTimeout(res, 1500));
-            const botResponse = { sender: 'bot', text: `Recebi sua mensagem: "${input}". A integração com o modelo de linguagem (Groq) ainda precisa ser feita no backend.`};
-            // ---- FIM DA RESPOSTA SIMULADA ----
-
-            setMessages(prev => [...prev, botResponse]);
-        } catch (error) {
-            const errorResponse = { sender: 'bot', text: 'Desculpe, não consegui me conectar ao meu cérebro. Tente novamente mais tarde.' };
-            setMessages(prev => [...prev, errorResponse]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="flex flex-col h-[calc(100vh-10rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
-            <div className="flex-1 p-6 overflow-y-auto">
-                <div className="space-y-6">
-                    {messages.map((msg, index) => (
-                        <div key={index} className={`flex items-start gap-4 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-                            {msg.sender === 'bot' && <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white"><Bot /></div>}
-                            <div className={`p-4 rounded-2xl max-w-lg ${msg.sender === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'}`}>
-                                <p>{msg.text}</p>
-                            </div>
-                            {msg.sender === 'user' && <div className="flex-shrink-0 w-10 h-10 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-slate-800 dark:text-slate-200"><User /></div>}
-                        </div>
-                    ))}
-                     {loading && (
-                        <div className="flex items-start gap-4">
-                             <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white"><Bot /></div>
-                             <div className="p-4 rounded-2xl max-w-lg bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none">
-                                <LoaderCircle className="animate-spin" />
-                             </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
+  return (
+    <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-100 dark:bg-gray-900">
+      <div className="flex-grow p-6 overflow-auto">
+        <div className="flex flex-col space-y-4">
+          {messages.map((msg, index) => (
+            <div key={index} className={`flex items-end ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {msg.sender === 'bot' && (
+                <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 flex-shrink-0">
+                  <Bot size={24} />
                 </div>
+              )}
+              <div
+                className={`px-4 py-2 rounded-lg inline-block max-w-lg ${
+                  msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200'
+                }`}
+              >
+                {msg.text}
+              </div>
             </div>
-            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-b-2xl">
-                <div className="relative">
-                    <input
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder="Digite sua pergunta sobre o desvio..."
-                        className="w-full p-4 pr-12 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={loading}
-                    />
-                    <button onClick={handleSend} disabled={loading || !input.trim()} className="absolute inset-y-0 right-0 flex items-center justify-center w-12 text-slate-500 hover:text-blue-500 disabled:text-slate-400 disabled:cursor-not-allowed">
-                        <Send />
-                    </button>
-                </div>
-            </div>
+          ))}
+           <div ref={messagesEndRef} />
         </div>
-    );
+      </div>
+      <div className="p-4 bg-white border-t border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Digite sua mensagem..."
+            className="flex-grow px-4 py-2 border rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
+          <button
+            onClick={handleSend}
+            className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <Send size={20} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default ChatbotPage;

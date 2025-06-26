@@ -1,27 +1,26 @@
-# docker-compose.yml (Corrigido)
-
 services:
   backend:
     build: ./backend
     container_name: blausight-backend
-    restart: always
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - blausight_data:/app/instance
-    environment:
-      - SECRET_KEY=uma-chave-secreta-super-segura-para-desenvolvimento
+      - blausight_db:/app/database
+      - blausight_model:/app/model
+    command: gunicorn --workers 3 --bind 0.0.0.0:8000 "app:create_app()"
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000/api
     container_name: blausight-frontend
-    restart: always
     ports:
-      # Mapeamos a porta 80 do container (Nginx) para a porta 5173 da sua máquina
-      - "5173:80"
+      - "5173:80" 
     depends_on:
       - backend
 
 volumes:
-  blausight_data:
+  blausight_db:
+  blausight_model:

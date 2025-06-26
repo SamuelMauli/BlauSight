@@ -1,117 +1,107 @@
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import Paragraph, Spacer
-from reportlab.lib.units import inch, mm
-from datetime import datetime
-import tempfile
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.lib.units import mm
+from io import BytesIO
 import os
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from datetime import datetime
 
-def generate_pdf_report(description, prediction, explanation):
-    # Cria o PDF em um arquivo temporário seguro
-    fd, file_path = tempfile.mkstemp(suffix=".pdf", prefix="report_")
-    os.close(fd)  # Fecha o descritor do arquivo para que a biblioteca possa abri-lo
-
-    c = canvas.Canvas(file_path, pagesize=A4)
-    width, height = A4
+def generate_pdf_report(deviation):
+    """
+    Gera um relatório PDF para um desvio específico com layout e estilo profissionais.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=20 * mm,
+        leftMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm
+    )
+    
     styles = getSampleStyleSheet()
-
-    # Estilos personalizados
-    title_style = ParagraphStyle(
+    styles.add(ParagraphStyle(
         name='TitleStyle',
         parent=styles['h1'],
-        fontName='Times-Bold',
+        fontName='Helvetica-Bold',
         fontSize=18,
         alignment=TA_CENTER,
         spaceAfter=12
-    )
-
-    heading_style = ParagraphStyle(
+    ))
+    styles.add(ParagraphStyle(
         name='HeadingStyle',
         parent=styles['h2'],
-        fontName='Times-Bold',
-        fontSize=14,
+        fontName='Helvetica-Bold',
+        fontSize=13,
+        textColor='#002E63', # Azul corporativo
         spaceAfter=6,
-        spaceBefore=12
-    )
-
-    normal_style = ParagraphStyle(
-        name='NormalStyle',
+        spaceBefore=10
+    ))
+    styles.add(ParagraphStyle(
+        name='BodyStyle',
         parent=styles['Normal'],
-        fontName='Times-Roman',
-        fontSize=12,
+        fontName='Helvetica',
+        fontSize=11,
         leading=14,
-        alignment=TA_LEFT
-    )
+        alignment=TA_JUSTIFY,
+        spaceAfter=12
+    ))
+    
+    story = []
 
-    # Margens (em mm) - padrão ABNT para trabalhos acadêmicos (podem ser ajustadas)
-    margin_top = 30 * mm
-    margin_bottom = 30 * mm
-    margin_left = 30 * mm
-    margin_right = 30 * mm
-
-    # Posição atual para o conteúdo
-    y_position = height - margin_top
-
-    # Inserir Logo
-    logo_path = os.path.join("app", "static", "Blau-Farmaceutica-logo.png") # Ajuste o caminho se necessário
+    # --- Cabeçalho e Título ---
+    logo_path = os.path.join(os.path.dirname(__file__), 'static', 'Blau-Farmaceutica-logo.png')
     if os.path.exists(logo_path):
-        try:
-            img_width = 1.5 * inch
-            img_height = img_width * (141 / 592) # Mantém a proporção (altura/largura original)
-            c.drawImage(logo_path, margin_left, y_position - img_height, width=img_width, height=img_height, mask='auto')
-            y_position -= (img_height + 0.5 * inch)
-        except Exception as e:
-            print(f"Erro ao inserir logo: {e}")
-            y_position -= 0.5 * inch # Espaço se a logo não for inserida
-    else:
-        y_position -= 0.5 * inch # Espaço se a logo não for encontrada
+        logo = Image(logo_path, width=120, height=30)
+        logo.hAlign = 'LEFT'
+        story.append(logo)
+    
+    story.append(Spacer(1, 15 * mm))
+    story.append(Paragraph("Relatório de Análise de Desvio", styles['TitleStyle']))
+    story.append(Spacer(1, 10 * mm))
 
-    # Título
-    title = Paragraph("Relatório de Análise de Desvio", title_style)
-    title_width, title_height = title.wrapOn(c, width - margin_left - margin_right, y_position)
-    title.drawOn(c, margin_left, y_position - title_height)
-    y_position -= (title_height + 0.5 * inch)
+    # --- Conteúdo do Relatório ---
+    report_content = {
+        "Descrição do Desvio": deviation.deviation_description,
+        "Data da Ocorrência": deviation.deviation_date,
+        "Item de GMP não Cumprido": deviation.gmp_item,
+        "Produto(s) e Lote(s) Envolvido(s)": deviation.product_involved,
+        "Análise de Causa Raiz": deviation.root_cause,
+        "Ações Imediatas Tomadas": deviation.immediate_actions,
+        "Ações Corretivas e Preventivas": deviation.preventive_actions,
+        "Responsáveis pela Investigação": deviation.responsible_investigation,
+        "Decisão Final (Conforme Registro)": deviation.final_decision
+    }
 
-    # Descrição Analisada
-    heading_descricao = Paragraph("Descrição Analisada:", heading_style)
-    heading_descricao_width, heading_descricao_height = heading_descricao.wrapOn(c, width - margin_left - margin_right, y_position)
-    heading_descricao.drawOn(c, margin_left, y_position - heading_descricao_height)
-    y_position -= heading_descricao_height
+    for title, content in report_content.items():
+        story.append(Paragraph(title, styles['HeadingStyle']))
+        story.append(Paragraph(content or "Não informado.", styles['BodyStyle']))
 
-    descricao_paragraph = Paragraph(description, normal_style)
-    descricao_width, descricao_height = descricao_paragraph.wrapOn(c, width - margin_left - margin_right, y_position)
-    descricao_paragraph.drawOn(c, margin_left, y_position - descricao_height)
-    y_position -= (descricao_height + 0.3 * inch)
+    # --- Seção de Análise da IA ---
+    story.append(Paragraph("Análise por Inteligência Artificial", styles['HeadingStyle']))
+    
+    prediction_text = "Não analisado"
+    if deviation.prediction_procedente is not None and deviation.prediction_improcedente is not None:
+        if deviation.prediction_procedente > deviation.prediction_improcedente:
+            prediction_text = f"<b>Procedente</b> (Confiança: {deviation.prediction_procedente:.2f}%)"
+        else:
+            prediction_text = f"<b>Improcedente</b> (Confiança: {deviation.prediction_improcedente:.2f}%)"
 
-    # Previsão da Causa Raiz
-    heading_predicao = Paragraph("Previsão da Causa Raiz:", heading_style)
-    heading_predicao_width, heading_predicao_height = heading_predicao.wrapOn(c, width - margin_left - margin_right, y_position)
-    heading_predicao.drawOn(c, margin_left, y_position - heading_predicao_height)
-    y_position -= heading_predicao_height
+    story.append(Paragraph(f"<b>Previsão de Resultado:</b> {prediction_text}", styles['BodyStyle']))
 
-    predicao_paragraph = Paragraph(prediction, normal_style)
-    predicao_width, predicao_height = predicao_paragraph.wrapOn(c, width - margin_left - margin_right, y_position)
-    predicao_paragraph.drawOn(c, margin_left, y_position - predicao_height)
-    y_position -= (predicao_height + 0.3 * inch)
+    # --- Construção e Rodapé ---
+    def add_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica', 9)
+        canvas.setFillColorRGB(0.5, 0.5, 0.5)
+        footer_text = f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Blau Farmacêutica"
+        canvas.drawRightString(doc.width + doc.leftMargin, doc.bottomMargin / 2, footer_text)
+        canvas.restoreState()
 
-    # Justificativa
-    heading_justificativa = Paragraph("Justificativa:", heading_style)
-    heading_justificativa_width, heading_justificativa_height = heading_justificativa.wrapOn(c, width - margin_left - margin_right, y_position)
-    heading_justificativa.drawOn(c, margin_left, y_position - heading_justificativa_height)
-    y_position -= heading_justificativa_height
-
-    justificativa_paragraph = Paragraph(explanation, normal_style)
-    justificativa_width, justificativa_height = justificativa_paragraph.wrapOn(c, width - margin_left - margin_right, y_position)
-    justificativa_paragraph.drawOn(c, margin_left, y_position - justificativa_height)
-    y_position -= justificativa_height
-
-    # Rodapé
-    c.setFont("Times-Roman", 10)
-    c.setFillColorRGB(0.5, 0.5, 0.5) # Cor cinza para o rodapé
-    c.drawString(margin_left, margin_bottom, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-    c.drawRightString(width - margin_right, margin_bottom, "Blau Farmacêutica")
-
-    c.save()
-    return file_path
+    doc.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
+    
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes

@@ -1,39 +1,40 @@
-import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS  # <-- CORREÇÃO: Importação adicionada
-from .config import Config
+from flask_cors import CORS
+import os
+import logging
 
 db = SQLAlchemy()
 
 def create_app():
-    """
-    Cria e configura a instância da aplicação Flask (Application Factory).
-    """
-    app = Flask(__name__, instance_relative_config=True)
-    app.config.from_object(Config)
+    app = Flask(__name__)
+    CORS(app)
 
-    # Garante que a pasta 'instance' exista.
-    try:
-        os.makedirs(app.instance_path)
-    except OSError:
-        pass
-        
-    # Configura o CORS para permitir requisições do seu frontend
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # Configuração de Logging
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
-    # Inicialize o db com a aplicação.
+    # Configuração do Banco de Dados
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'database', 'database.db')
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+    # Inicialização do DB
     db.init_app(app)
 
+    # Criação das pastas necessárias
+    upload_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads')
+    model_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'model')
+    os.makedirs(upload_folder, exist_ok=True)
+    os.makedirs(model_folder, exist_ok=True)
+    app.config['UPLOAD_FOLDER'] = upload_folder
+
+    from . import routes
+    app.register_blueprint(routes.bp, url_prefix='/api')
+
     with app.app_context():
-        # Importe as rotas e modelos aqui, dentro do contexto da aplicação,
-        # para evitar importações circulares.
-        from . import routes
         from . import models
-
-        app.register_blueprint(routes.bp)
-
-        # Crie as tabelas do banco de dados, se não existirem.
         db.create_all()
 
     return app
