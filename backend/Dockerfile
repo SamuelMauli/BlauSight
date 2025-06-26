@@ -1,20 +1,21 @@
+# Use uma imagem oficial do Python como imagem base
 FROM python:3.11-slim
 
-# Define o diretório de trabalho dentro do container
+# Define o diretório de trabalho no contêiner
 WORKDIR /app
 
-# Copia o arquivo de dependências primeiro para aproveitar o cache do Docker
-COPY requirements.txt .
+# Instala o cliente SQLite
+# Adicione estas duas linhas:
+RUN apt-get update && apt-get install -y sqlite3
 
-# Instala as dependências
+# Copia o arquivo de requisitos e instala as dependências
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia todo o código da aplicação
+# Copia o resto do código da sua aplicação
 COPY . .
 
-# Expõe a porta que o Gunicorn vai usar
+# Expõe a porta que o Gunicorn irá rodar
 EXPOSE 8000
 
-# CORREÇÃO: Comando para iniciar a aplicação em modo de desenvolvimento com Gunicorn.
-# O Gunicorn agora irá monitorar as mudanças nos arquivos e reiniciar automaticamente.
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--reload", "run:app"]
+# O comando para rodar a aplicação será definido no docker-compose.yml
