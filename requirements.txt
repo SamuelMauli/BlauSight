@@ -1,9 +1,0 @@
-flask
-flask_sqlalchemy
-python-docx
-scikit-learn
-pandas
-joblib
-mysql-connector-python
-python-dotenv
-reportlab

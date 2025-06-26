@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>BlauSight - Análise de Desvios</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">BlauSight - Análise Preditiva de Causa Raiz</h1>
+        <hr>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-md-6">
+                <h2>1. Treinar o Modelo</h2>
+                <p>Envie um arquivo <code>.zip</code> contendo os relatórios de desvio em formato <code>.docx</code> para treinar ou atualizar o modelo de IA.</p>
+                <form action="{{ url_for('main.upload_zip') }}" method="post" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <input type="file" name="zipfile" class="form-control-file" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Enviar e Treinar</button>
+                </form>
+            </div>
+
+            <div class="col-md-6">
+                <h2>2. Analisar um Novo Desvio</h2>
+                <p>Insira a descrição de um novo desvio para que o modelo preveja a causa raiz mais provável.</p>
+                <form action="{{ url_for('main.analyze') }}" method="post">
+                    <div class="form-group">
+                        <textarea name="description" class="form-control" rows="5" placeholder="Cole a descrição do desvio aqui..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success">Analisar Texto</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

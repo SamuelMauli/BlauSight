@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultado da Análise</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Resultado da Análise</h1>
+        <div class="card">
+            <div class="card-header">
+                Análise Preditiva
+            </div>
+            <div class="card-body">
+                <h5>Descrição Analisada:</h5>
+                <p class="card-text"><em>{{ description }}</em></p>
+                <hr>
+                <h5>Previsão da Causa Raiz:</h5>
+                <p class="card-text"><strong>{{ prediction }}</strong></p>
+            </div>
+        </div>
+        <div class="text-center mt-4">
+            <a href="{{ url_for('main.download_report', filename=pdf_filename) }}" class="btn btn-info">Baixar Relatório em PDF</a>
+            <a href="{{ url_for('main.index') }}" class="btn btn-secondary">Voltar para a Página Inicial</a>
+        </div>
+    </div>
+</body>
+</html>
