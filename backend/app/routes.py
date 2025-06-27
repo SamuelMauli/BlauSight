@@ -1,18 +1,20 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 import os
 import zipfile
 import tempfile
 import shutil
 import logging
+import io
+
+# Importações que estavam faltando ou foram perdidas
 from .extractor import extract_data_from_docx, extract_data_from_pdf
 from .models import Deviation, db
-import io
-import logging
+from .ml_engine import train_model, predict_deviation, explain_prediction
+from .utils import generate_pdf_report
 
 bp = Blueprint('api', __name__)
 
-UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'docx', 'pdf', 'zip'}
 
 def allowed_file(filename):
@@ -94,7 +96,11 @@ def predict():
     description = data['description']
     try:
         prediction, probability = predict_deviation(description)
+        # O modelo retorna 'Procedente' ou 'Improcedente'
         return jsonify({"prediction": prediction, "probability": float(probability)}), 200
+    except FileNotFoundError as e:
+        logging.error(f"Erro na predição: {e}")
+        return jsonify({"error": "Modelo de IA ainda não foi treinado. Por favor, envie arquivos para treinamento primeiro."}), 500
     except Exception as e:
         logging.error(f"Erro na predição: {e}")
         return jsonify({"error": "Erro ao realizar a predição"}), 500
@@ -117,7 +123,7 @@ def get_report(deviation_id):
             io.BytesIO(pdf_bytes),
             mimetype='application/pdf',
             as_attachment=True,
-            download_name=f'relatorio_desvio_{deviation_id}.pdf'
+            download_name=f'relatorio_desvio_{deviation.id_desvio}.pdf'
         )
     except Exception as e:
         logging.error(f"Erro ao gerar relatório para o desvio {deviation_id}: {e}")
@@ -127,7 +133,7 @@ def get_report(deviation_id):
 def get_explanation(deviation_id):
     try:
         deviation = Deviation.query.get_or_404(deviation_id)
-        explanation = explain_prediction(deviation.deviation_description)
+        explanation = explain_prediction(deviation.descricao)
         return jsonify({"explanation": explanation}), 200
     except Exception as e:
         logging.error(f"Erro ao gerar explicação para o desvio {deviation_id}: {e}")
@@ -152,7 +158,7 @@ def chat():
 @bp.route('/deviations', methods=['GET'])
 def get_deviations():
     try:
-        deviations = Deviation.query.all()
+        deviations = Deviation.query.order_by(Deviation.id.desc()).all()
         return jsonify([d.to_dict() for d in deviations]), 200
     except Exception as e:
         logging.error(f"Erro ao buscar desvios: {e}")

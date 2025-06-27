@@ -22,3 +22,4 @@ reportlab
 gunicorn   
 pypdf
 Flask-Migrate 
+eli5

@@ -16,7 +16,6 @@ const ChatbotPage = () => {
   }, [messages]);
   
   useEffect(() => {
-    // Mensagem inicial do bot
     setMessages([
       {
         text: "Olá! Eu sou o assistente virtual da BlauSight. Como posso te ajudar a analisar os desvios hoje?",

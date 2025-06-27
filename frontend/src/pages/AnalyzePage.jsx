@@ -8,6 +8,7 @@ const AnalyzePage = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
+  // A URL da API é lida das variáveis de ambiente
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
   const handleAnalyze = async (e) => {
@@ -21,6 +22,7 @@ const AnalyzePage = () => {
     setError('');
 
     try {
+      // **AQUI ESTÁ A CORREÇÃO: A ROTA CORRETA É /predict**
       const response = await axios.post(`${API_URL}/predict`, {
         description: description,
       });
