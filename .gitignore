@@ -6,3 +6,5 @@ app/__pycache__/
 
 # Ignora o arquivo do modelo treinado
 trained_model/model.pkl
+
+.env.env

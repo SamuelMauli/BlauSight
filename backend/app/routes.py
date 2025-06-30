@@ -12,6 +12,11 @@ from .extractor import extract_data_from_docx, extract_data_from_pdf
 from .models import Deviation, db
 from .ml_engine import train_model, predict_deviation, explain_prediction
 from .utils import generate_pdf_report
+from groq import Groq
+
+
+logging.basicConfig(level=logging.INFO)
+
 
 bp = Blueprint('api', __name__)
 
@@ -142,18 +147,70 @@ def get_explanation(deviation_id):
 @bp.route('/chat', methods=['POST'])
 def chat():
     data = request.get_json()
-    message = data.get('message', '').lower()
+    if not data or 'message' not in data:
+        logging.error("Recebida requisição de chat inválida (JSON ou 'message' ausente).")
+        return jsonify({"error": "Requisição inválida. O corpo deve ser um JSON com a chave 'message'."}), 400
 
-    if "olá" in message or "oi" in message:
-        response = "Olá! Sou o assistente da BlauSight. Como posso ajudar você hoje?"
-    elif "relatório" in message:
-        response = "Para gerar um relatório, vá para a página de Análise, encontre o desvio desejado e clique no ícone de PDF."
-    elif "treinar" in message:
-        response = "O treinamento do modelo de IA pode ser iniciado na página 'Treinar IA'. Recomenda-se fazer isso após o upload de novos dados."
-    else:
-        response = "Desculpe, não entendi. Posso ajudar com dúvidas sobre relatórios, análise e treinamento do modelo."
+    user_message = data['message']
+    logging.info(f"Recebida mensagem do usuário: '{user_message}'")
 
-    return jsonify({"reply": response})
+    # 1. Validação da Chave de API da Groq
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        logging.error("A variável de ambiente GROQ_API_KEY não foi definida.")
+        return jsonify({"error": "A chave da API da Groq não está configurada no servidor."}), 500
+
+    client = Groq(api_key=api_key)
+
+    try:
+        # 2. Busca e formatação de dados do banco de dados
+        logging.info("Buscando desvios no banco de dados...")
+        recent_deviations = Deviation.query.order_by(Deviation.id.desc()).limit(10).all()
+        
+        if not recent_deviations:
+            logging.warning("Nenhum desvio encontrado no banco de dados para usar como contexto.")
+            context_data = "Nenhum dado de desvio disponível."
+        else:
+            context_data = "\n".join([
+                f"- ID do Desvio: {d.id_desvio}, Descrição: {d.descricao}, Causa Raiz: {d.causa_raiz}" 
+                for d in recent_deviations
+            ])
+        logging.info("Contexto de desvios preparado para a IA.")
+
+        # 3. Construção do Prompt para a IA
+        system_prompt = (
+            "Você é um assistente de IA focado em análise de desvios para a indústria farmacêutica. "
+            "Responda às perguntas do usuário com base nos dados de desvios fornecidos a seguir. "
+            "Seja objetivo e atenha-se aos fatos apresentados.\n\n"
+            "## Dados de Desvios Recentes:\n"
+            f"{context_data}"
+        )
+
+        # 4. Chamada para a API da Groq
+        logging.info("Enviando requisição para a API da Groq...")
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_message,
+                }
+            ],
+            model="llama3-8b-8192",
+        )
+
+        bot_reply = chat_completion.choices[0].message.content
+        logging.info("Resposta recebida da Groq com sucesso.")
+        
+        return jsonify({"reply": bot_reply})
+
+    except Exception as e:
+        # Captura qualquer erro que possa ocorrer no processo e o registra
+        logging.error(f"Ocorreu um erro inesperado na rota /chat: {e}", exc_info=True)
+        return jsonify({"error": "Ocorreu um erro interno no servidor ao processar a sua mensagem."}), 500
 
 @bp.route('/deviations', methods=['GET'])
 def get_deviations():

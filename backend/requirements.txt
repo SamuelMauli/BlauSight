@@ -23,3 +23,4 @@ gunicorn
 pypdf
 Flask-Migrate 
 eli5
+groq
