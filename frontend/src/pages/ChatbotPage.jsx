@@ -40,17 +40,20 @@ const ChatbotPage = () => {
         body: JSON.stringify({ message: input }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('A resposta da rede não foi ok');
+        // Usa a mensagem de erro da API se disponível
+        throw new Error(data.error || 'A resposta da rede não foi ok');
       }
 
-      const data = await response.json();
       const botMessage = { text: data.reply, sender: 'bot' };
       setMessages(prev => [...prev, botMessage]);
 
     } catch (error) {
       console.error("Erro ao contatar a API do chat:", error);
-      const errorMessage = { text: "Desculpe, estou com problemas para me conectar ao servidor. Tente novamente mais tarde.", sender: 'bot' };
+      // Exibe a mensagem de erro capturada
+      const errorMessage = { text: `Desculpe, ocorreu um erro: ${error.message}`, sender: 'bot' };
       setMessages(prev => [...prev, errorMessage]);
     }
   };

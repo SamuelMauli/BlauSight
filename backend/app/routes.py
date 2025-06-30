@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, current_app
 from werkzeug.utils import secure_filename
 import os
 import zipfile
@@ -144,55 +144,30 @@ def get_explanation(deviation_id):
         logging.error(f"Erro ao gerar explicação para o desvio {deviation_id}: {e}")
         return jsonify({"error": "Não foi possível gerar a explicação"}), 500
 
-@bp.route('/chat', methods=['POST'])
-def chat():
-    data = request.get_json()
-    if not data or 'message' not in data:
-        logging.error("Recebida requisição de chat inválida (JSON ou 'message' ausente).")
-        return jsonify({"error": "Requisição inválida. O corpo deve ser um JSON com a chave 'message'."}), 400
-
-    user_message = data['message']
-    logging.info(f"Recebida mensagem do usuário: '{user_message}'")
-
-    # 1. Validação da Chave de API da Groq
+bp.route('/chat', methods=['POST'])
+def chat_request():
     api_key = os.environ.get("GROQ_API_KEY")
+    # Agora o log vai funcionar corretamente
+    current_app.logger.info(f"Tentando acessar /chat. Valor da GROQ_API_KEY: '{'...' if api_key else 'None'}'")
+
     if not api_key:
-        logging.error("A variável de ambiente GROQ_API_KEY não foi definida.")
+        current_app.logger.error("A chave da API da Groq não foi encontrada nas variáveis de ambiente.")
         return jsonify({"error": "A chave da API da Groq não está configurada no servidor."}), 500
 
-    client = Groq(api_key=api_key)
-
     try:
-        # 2. Busca e formatação de dados do banco de dados
-        logging.info("Buscando desvios no banco de dados...")
-        recent_deviations = Deviation.query.order_by(Deviation.id.desc()).limit(10).all()
+        client = Groq(api_key=api_key)
         
-        if not recent_deviations:
-            logging.warning("Nenhum desvio encontrado no banco de dados para usar como contexto.")
-            context_data = "Nenhum dado de desvio disponível."
-        else:
-            context_data = "\n".join([
-                f"- ID do Desvio: {d.id_desvio}, Descrição: {d.descricao}, Causa Raiz: {d.causa_raiz}" 
-                for d in recent_deviations
-            ])
-        logging.info("Contexto de desvios preparado para a IA.")
+        data = request.get_json()
+        user_message = data.get('message')
 
-        # 3. Construção do Prompt para a IA
-        system_prompt = (
-            "Você é um assistente de IA focado em análise de desvios para a indústria farmacêutica. "
-            "Responda às perguntas do usuário com base nos dados de desvios fornecidos a seguir. "
-            "Seja objetivo e atenha-se aos fatos apresentados.\n\n"
-            "## Dados de Desvios Recentes:\n"
-            f"{context_data}"
-        )
+        if not user_message:
+            return jsonify({"error": "Nenhuma mensagem fornecida."}), 400
 
-        # 4. Chamada para a API da Groq
-        logging.info("Enviando requisição para a API da Groq...")
         chat_completion = client.chat.completions.create(
             messages=[
                 {
                     "role": "system",
-                    "content": system_prompt,
+                    "content": "Você é um assistente prestativo."
                 },
                 {
                     "role": "user",
@@ -202,16 +177,13 @@ def chat():
             model="llama3-8b-8192",
         )
 
-        bot_reply = chat_completion.choices[0].message.content
-        logging.info("Resposta recebida da Groq com sucesso.")
-        
-        return jsonify({"reply": bot_reply})
+        reply = chat_completion.choices[0].message.content
+        return jsonify({"reply": reply})
 
     except Exception as e:
-        # Captura qualquer erro que possa ocorrer no processo e o registra
-        logging.error(f"Ocorreu um erro inesperado na rota /chat: {e}", exc_info=True)
-        return jsonify({"error": "Ocorreu um erro interno no servidor ao processar a sua mensagem."}), 500
-
+        current_app.logger.error(f"Ocorreu um erro na API do Groq: {e}")
+        return jsonify({"error": str(e)}), 500
+    
 @bp.route('/deviations', methods=['GET'])
 def get_deviations():
     try:

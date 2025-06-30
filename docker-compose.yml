@@ -1,26 +1,26 @@
+version: '3.8'
+
 services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    networks:
+      - app-network
+
   backend:
     build: ./backend
-    container_name: blausight-backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
-      - blausight_db:/app/database
-      - blausight_model:/app/model
-    command: gunicorn --workers 3 --bind 0.0.0.0:8000 "app:create_app()"
+    # Adicione esta seção para carregar o .env
+    env_file:
+      - .env
+    networks:
+      - app-network
+    # Se você tiver uma configuração de banco de dados, ela deve ser adicionada aqui
+    # depends_on:
+    #   - db
 
-  frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_URL: http://localhost:8000/api
-    container_name: blausight-frontend
-    ports:
-      - "5173:80" 
-    depends_on:
-      - backend
-
-volumes:
-  blausight_db:
-  blausight_model:
+networks:
+  app-network:
+    driver: bridge

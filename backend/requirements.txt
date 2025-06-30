@@ -2,7 +2,7 @@ click
 colorama
 Flask
 Flask-SQLAlchemy
-Flask-Cors 
+Flask-Cors
 itsdangerous
 Jinja2
 MarkupSafe
@@ -19,8 +19,10 @@ python-docx
 fpdf
 greenlet
 reportlab
-gunicorn   
+gunicorn
 pypdf
-Flask-Migrate 
+Flask-Migrate
 eli5
 groq
+python-dotenv
+mysql-connector-python
