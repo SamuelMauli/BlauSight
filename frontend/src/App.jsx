@@ -4,6 +4,8 @@ import Header from './components/Header';
 import AnalyzePage from './pages/AnalyzePage';
 import TrainPage from './pages/TrainPage';
 import ChatbotPage from './pages/ChatbotPage';
+import CDTExpertPage from './pages/CDTExpertPage';
+
 
 function App() {
   const [activePage, setActivePage] = useState('analyze');
@@ -23,6 +25,8 @@ function App() {
         return <TrainPage />;
       case 'chatbot':
         return <ChatbotPage />;
+      case 'cdt-expert':
+        return <CDTExpertPage />;
       case 'analyze':
       default:
         return <AnalyzePage />;

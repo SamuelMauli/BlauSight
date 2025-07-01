@@ -97,26 +97,6 @@ const TrainPage = () => {
           </div>
         )}
       </div>
-
-      {/* Card de Treinamento */}
-      <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
-        <div className="flex items-center text-purple-500 dark:text-purple-400 mb-4">
-          <BrainCircuit size={32} className="mr-3" />
-          <h2 className="text-2xl font-bold">2. Treinar Modelo de IA</h2>
-        </div>
-        <p className="text-slate-600 dark:text-slate-400 mb-6">
-          Após enviar novos dados, clique no botão abaixo para usar todo o histórico do banco de dados e treinar uma nova versão do modelo de inteligência artificial.
-        </p>
-        <button onClick={handleTrain} disabled={trainLoading} className="w-full flex justify-center items-center bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition duration-300 disabled:bg-purple-300 dark:disabled:bg-slate-600">
-          {trainLoading ? <><LoaderCircle className="animate-spin mr-2" /> Treinando...</> : 'Iniciar Treinamento do Modelo'}
-        </button>
-        {trainMessage.text && (
-          <div className={`mt-6 p-4 rounded-lg flex items-center text-sm ${trainMessage.type === 'success' ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'}`}>
-            {trainMessage.type === 'success' ? <FileCheck className="mr-3" /> : <AlertTriangle className="mr-3" />}
-            {trainMessage.text}
-          </div>
-        )}
-      </div>
     </div>
   );
 };

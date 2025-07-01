@@ -1,18 +1,25 @@
-# app/models.py
 from . import db
 
 class Deviation(db.Model):
-    __tablename__ = 'deviations'  # É uma boa prática nomear a tabela explicitamente.
-
     id = db.Column(db.Integer, primary_key=True)
-    area = db.Column(db.String(255), nullable=True)
-    gestor = db.Column(db.String(255), nullable=True)
-    data_desvio = db.Column(db.String(50), nullable=True)
-    produto = db.Column(db.String(255), nullable=True)
-    lote = db.Column(db.String(50), nullable=True)
     id_desvio = db.Column(db.String(50), unique=True, nullable=False)
+    data_identificacao = db.Column(db.String(50))
     descricao = db.Column(db.Text, nullable=False)
-    causa_raiz = db.Column(db.Text, nullable=False)
+    causa_raiz = db.Column(db.Text)
+    acao_corretiva = db.Column(db.Text)
+    status_acao = db.Column(db.String(50))
+    classificacao_desvio = db.Column(db.String(100))
+    keywords = db.Column(db.Text, nullable=True)
 
-    def __repr__(self):
-        return f'<Deviation {self.id_desvio}>'
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'id_desvio': self.id_desvio,
+            'data_identificacao': self.data_identificacao,
+            'descricao': self.descricao,
+            'causa_raiz': self.causa_raiz,
+            'acao_corretiva': self.acao_corretiva,
+            'status_acao': self.status_acao,
+            'classificacao_desvio': self.classificacao_desvio,
+            'keywords': self.keywords
+        }

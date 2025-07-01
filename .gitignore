@@ -1,11 +1,5 @@
-# Ignora a pasta do ambiente virtual
 .venv/
 
-# Ignora o cache de bytecode Python dentro de app
 app/__pycache__/
 
-# Ignora o arquivo do modelo treinado
-trained_model/model.pkl
-
-.env
 .env

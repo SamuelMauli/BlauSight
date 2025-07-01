@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrainCircuit, BotMessageSquare, UploadCloud, Sun, Moon, X } from 'lucide-react';
+import { BrainCircuit, BotMessageSquare, UploadCloud, Sun, Moon, X, FileCheck2 } from 'lucide-react';
 
 const NavItem = ({ icon, text, active, onClick }) => (
   <li>
@@ -36,6 +36,7 @@ const Sidebar = ({ activePage, setActivePage, theme, setTheme, sidebarOpen, setS
     { id: 'analyze', text: 'Análise Preditiva', icon: <BrainCircuit size={20} /> },
     { id: 'train', text: 'Treinar Modelo', icon: <UploadCloud size={20} /> },
     { id: 'chatbot', text: 'Assistente IA', icon: <BotMessageSquare size={20} /> },
+    { id: 'cdt-expert', text: 'CDT Expert', icon: <FileCheck2 size={20} /> },
   ];
 
   return (

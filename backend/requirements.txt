@@ -23,6 +23,7 @@ gunicorn
 pypdf
 Flask-Migrate
 eli5
+google-generativeai
 groq
 python-dotenv
 mysql-connector-python
