@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { BrainCircuit, LoaderCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { BrainCircuit, LoaderCircle, AlertTriangle, FileText, CheckCircle, Search, Wrench, ShieldAlert } from 'lucide-react';
 
 const AnalyzePage = () => {
   const [description, setDescription] = useState('');
@@ -8,91 +8,127 @@ const AnalyzePage = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
-  // A URL da API é lida das variáveis de ambiente
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
-  const handleAnalyze = async (e) => {
+  const handlePredict = async (e) => {
     e.preventDefault();
-    if (!description.trim()) {
-      setError('Por favor, insira a descrição do desvio para análise.');
-      return;
-    }
     setLoading(true);
     setResult(null);
     setError('');
-
     try {
-      // **AQUI ESTÁ A CORREÇÃO: A ROTA CORRETA É /predict**
-      const response = await axios.post(`${API_URL}/predict`, {
-        description: description,
-      });
+      const response = await axios.post(`${API_URL}/predict`, { description });
       setResult(response.data);
     } catch (err) {
-      const errorMsg = err.response?.data?.error || 'Não foi possível conectar ao servidor de análise.';
-      setError(errorMsg);
+      setError(err.response?.data?.error || 'Erro ao conectar ao servidor.');
     } finally {
       setLoading(false);
     }
   };
 
+  const InfoBlock = ({ icon, title, children }) => (
+    <div className="bg-slate-100 dark:bg-slate-700/50 p-4 rounded-lg">
+      <div className="flex items-center mb-2">
+        {icon}
+        <h4 className="font-semibold ml-2">{title}</h4>
+      </div>
+      <div className="text-sm text-text-secondary-light dark:text-text-secondary-dark pl-8 space-y-2">
+        {children}
+      </div>
+    </div>
+  );
+
   return (
-    <div>
-      <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
-        <div className="flex items-center text-purple-500 dark:text-purple-400 mb-4">
-          <BrainCircuit size={32} className="mr-3" />
-          <h2 className="text-2xl font-bold">Análise Preditiva de Desvio</h2>
+    <div className="space-y-8 animate-fade-in">
+      <div className="blausight-card">
+        <div className="blausight-card-header">
+          <div className="blausight-card-icon">
+            <BrainCircuit size={22} />
+          </div>
+          <h2 className="blausight-card-title">Análise Preditiva e Solução Proposta</h2>
         </div>
-        <p className="text-slate-600 dark:text-slate-400 mb-6">
-          Insira a descrição de um novo desvio. A IA irá analisar o texto e prever se o desvio é procedente ou improcedente, com base nos dados históricos.
+        <p className="blausight-card-description">
+          Descreva um novo desvio. A IA irá analisar, contextualizar com dados históricos, diagnosticar a causa raiz e propor um plano de ação.
         </p>
-        
-        <form onSubmit={handleAnalyze}>
+        <form onSubmit={handlePredict}>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full h-40 p-3 border-2 border-slate-200 dark:border-slate-700 rounded-lg mb-4 focus:ring-2 focus:ring-purple-500 dark:bg-slate-900 dark:text-slate-200"
-            placeholder="Descreva detalhadamente o desvio ocorrido aqui..."
+            placeholder="Ex: Durante a compressão do lote CAP-9981, o sistema de exaustão de pós da sala S-05 falhou..."
+            className="w-full p-4 border border-border-light dark:border-border-dark rounded-lg bg-bg-primary-light dark:bg-bg-primary-dark focus:ring-2 focus:ring-accent-primary focus:outline-none transition"
+            rows="5"
             disabled={loading}
           />
-          <button 
-            type="submit" 
-            disabled={loading || !description} 
-            className="w-full flex justify-center items-center bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition duration-300 disabled:bg-purple-300 dark:disabled:bg-slate-600"
-          >
-            {loading ? <><LoaderCircle className="animate-spin mr-2" /> Analisando...</> : 'Analisar Desvio'}
+          <button type="submit" disabled={loading || !description} className="blausight-button-primary mt-4">
+            {loading ? <><LoaderCircle className="animate-spin mr-2" /> Analisando...</> : 'Analisar e Propor Solução'}
           </button>
         </form>
-
-        {error && (
-          <div className="mt-6 p-4 rounded-lg flex items-center text-sm bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300">
-            <AlertTriangle className="mr-3" />
-            {error}
-          </div>
-        )}
-
-        {result && (
-          <div className="mt-6 p-6 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center mb-4">
-                <Sparkles className="mr-3 text-purple-500" />
-                Resultado da Análise
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow">
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Previsão</p>
-                      <p className={`text-xl font-bold ${result.prediction === 'Procedente' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                        {result.prediction}
-                      </p>
-                  </div>
-                  <div className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow">
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Nível de Confiança</p>
-                      <p className="text-xl font-bold text-slate-700 dark:text-slate-300">
-                        {(result.probability * 100).toFixed(2)}%
-                      </p>
-                  </div>
-              </div>
-          </div>
-        )}
       </div>
+
+      {error && (
+        <div className="p-4 rounded-lg flex items-center text-sm bg-red-100 dark:bg-red-900/50 text-danger animate-fade-in">
+          <AlertTriangle className="mr-3" /> {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="blausight-card animate-fade-in">
+          <div className="blausight-card-header">
+            <div className="blausight-card-icon">
+              <FileText size={22} />
+            </div>
+            <h3 className="blausight-card-title">Relatório de Análise de Desvio</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className={`p-4 rounded-lg flex flex-col items-center justify-center text-center ${result.prediction === 'Procedente' ? 'bg-red-100 dark:bg-red-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}>
+              <p className="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">Predição</p>
+              <p className={`text-2xl font-bold ${result.prediction === 'Procedente' ? 'text-danger' : 'text-success'}`}>{result.prediction}</p>
+            </div>
+            <div className="p-4 rounded-lg flex flex-col items-center justify-center text-center bg-slate-100 dark:bg-slate-700/50">
+              <p className="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">Confiança</p>
+              <p className="text-2xl font-bold text-accent-primary dark:text-blue-400">{Math.round(result.probability * 100)}%</p>
+            </div>
+          </div>
+          
+          <div className="space-y-6">
+            <InfoBlock icon={<Search size={16} className="text-warning"/>} title="Análise de Causa Raiz">
+              <div>
+                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Causa Provável:</p>
+                <p>{result.root_cause_analysis.probable_cause}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Evidência Histórica:</p>
+                <p className="italic">"{result.root_cause_analysis.evidence}"</p>
+              </div>
+            </InfoBlock>
+            
+            <InfoBlock icon={<Wrench size={16} className="text-accent-primary"/>} title="Plano de Ação Proposto">
+               <div>
+                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Ações Imediatas:</p>
+                <ul className="list-disc pl-5">
+                    {result.proposed_solution.immediate_actions.map((action, index) => <li key={index}>{action}</li>)}
+                </ul>
+              </div>
+               <div>
+                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Ações Corretivas:</p>
+                 <ul className="list-disc pl-5">
+                    {result.proposed_solution.corrective_actions.map((action, index) => <li key={index}>{action}</li>)}
+                </ul>
+              </div>
+            </InfoBlock>
+            
+            <InfoBlock icon={<ShieldAlert size={16} className="text-danger"/>} title="Desvios Similares para Consulta">
+                <div className="flex flex-wrap gap-2">
+                    {result.similar_deviations.map((id, index) => (
+                        <span key={index} className="px-3 py-1 text-xs font-bold rounded-full bg-slate-200 dark:bg-slate-600 text-text-secondary-light dark:text-text-secondary-dark">
+                            {id}
+                        </span>
+                    ))}
+                </div>
+            </InfoBlock>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

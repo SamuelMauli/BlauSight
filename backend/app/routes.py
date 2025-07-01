@@ -148,34 +148,55 @@ def predict_with_gemini():
 
     try:
         model = get_gemini_model()
+
+        # Busca desvios no banco para dar contexto à IA
         recent_deviations = Deviation.query.order_by(Deviation.id.desc()).limit(20).all()
-        context_examples = "\\n".join([f"- ID:{d.id_desvio}, Desc: {d.descricao}, Keywords: {d.keywords}" for d in recent_deviations])
+        # Formata o contexto para o prompt
+        context_examples = "\n\n".join([
+            f"--- Exemplo de Desvio Anterior ---\n"
+            f"ID: {d.id_desvio}\n"
+            f"Descrição: {d.descricao}\n"
+            f"Causa Raiz Identificada: {d.causa_raiz}\n"
+            f"Ação Corretiva Aplicada: {d.acao_corretiva}\n"
+            f"Status: {d.status_acao}\n"
+            f"---------------------------------"
+            for d in recent_deviations
+        ])
 
+        # ✅ NOVO PROMPT INTELIGENTE
         prompt = f"""
-        Você é um especialista em análise de risco e compliance farmacêutica. Sua tarefa é realizar uma análise preditiva sobre um novo desvio.
-        Seu objetivo é ser crítico, assertivo e se basear nos exemplos fornecidos para dar um retorno proposto. Evite devaneios.
+        Você é um especialista sênior em garantia de qualidade e análise de causa raiz na indústria farmacêutica.
+        Sua tarefa é analisar um novo relatório de desvio, compará-lo com exemplos históricos e fornecer uma análise completa e acionável.
 
-        **Contexto de Desvios Anteriores:**
-        ---
+        **Contexto de Desvios Históricos:**
         {context_examples}
-        ---
 
         **Novo Desvio para Análise:**
         "{new_description}"
 
-        **Sua Tarefa:**
-        Com base no novo desvio e no contexto dos anteriores, realize uma análise e retorne um objeto JSON com a seguinte estrutura:
+        **Sua Tarefa (Responda APENAS com o objeto JSON):**
+        Analise o novo desvio e o contexto histórico para gerar um relatório em formato JSON com a seguinte estrutura:
         {{
             "prediction": "Procedente" ou "Improcedente",
             "probability": um float entre 0.0 e 1.0 representando sua confiança,
-            "justification": "Uma explicação curta e direta do porquê da sua predição, baseada nos dados.",
-            "recommended_classification": "Sugira uma classificação (Crítico, Maior, Menor) com base na severidade.",
-            "related_keywords": ["Liste 3 a 5 palavras-chave do contexto que mais se relacionam com este novo desvio."]
+            "root_cause_analysis": {{
+                "probable_cause": "Descreva a causa raiz mais provável para o novo desvio. Seja específico. Ex: 'Falha no procedimento de limpeza da sala X', 'Desgaste não detectado no equipamento Y'.",
+                "evidence": "Justifique sua conclusão com base nos exemplos históricos. Cite os IDs dos desvios mais parecidos e explique a semelhança. Ex: 'Esta análise é baseada no desvio DEV-2025-001, que também envolveu contaminação cruzada após uma limpeza inadequada.'"
+            }},
+            "proposed_solution": {{
+                "immediate_actions": [
+                    "Liste 2-3 ações imediatas e críticas a serem tomadas. Ex: 'Segregar e colocar o lote em quarentena', 'Interditar a linha de produção para investigação'."
+                ],
+                "corrective_actions": [
+                    "Liste 2-3 ações corretivas de longo prazo baseadas nas soluções de desvios passados. Ex: 'Revisar e reforçar o treinamento no POP de limpeza XYZ', 'Implementar checklist de dupla verificação para liberação de salas'."
+                ]
+            }},
+            "similar_deviations": [
+                "Liste os IDs (ex: 'DEV-2025-001') dos 2 ou 3 desvios históricos mais relevantes usados em sua análise."
+            ]
         }}
-
-        Seja direto e profissional na sua justificativa. Responda APENAS com o objeto JSON.
         """
-        
+
         response = model.generate_content(prompt)
         cleaned_response = response.text.strip().replace('```json', '').replace('```', '')
         
@@ -187,7 +208,7 @@ def predict_with_gemini():
     except Exception as e:
         logging.error(f"Erro na predição com Gemini: {e}")
         return jsonify({"error": "Erro ao realizar a predição com a IA"}), 500
-
+    
 @bp.route('/deviations', methods=['GET'])
 def get_deviations():
     try:

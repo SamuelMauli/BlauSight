@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* =================================
+    ESTILOS DE CARD - BLAUSIGHT
+    =================================
+  */
+  .blausight-card {
+    @apply bg-bg-secondary-light dark:bg-bg-secondary-dark 
+           rounded-2xl 
+           shadow-sm 
+           border border-border-light dark:border-border-dark 
+           p-6 sm:p-8 
+           transition-all duration-300;
+  }
+
+  .blausight-card-header {
+    @apply flex items-center mb-4;
+  }
+
+  .blausight-card-icon {
+    @apply w-10 h-10 flex-shrink-0 
+           mr-4 rounded-lg
+           flex items-center justify-center 
+           bg-accent-secondary dark:bg-accent-secondary-dark text-accent-primary dark:text-blue-300;
+  }
+  
+  .blausight-card-title {
+    @apply text-xl font-bold text-text-primary-light dark:text-text-primary-dark;
+  }
+
+  .blausight-card-description {
+    @apply text-text-secondary-light dark:text-text-secondary-dark mb-6;
+  }
+
+  .blausight-button-primary {
+    @apply w-full flex justify-center items-center 
+           bg-accent-primary text-white font-bold 
+           py-3 px-4 rounded-lg 
+           hover:bg-accent-primary-hover 
+           transition duration-300 
+           disabled:bg-opacity-50 disabled:cursor-not-allowed;
+  }
+}

@@ -4,17 +4,43 @@
 
 @layer base {
   body {
-    @apply bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200;
+    /* Agora o Tailwind reconhece estas classes pois elas foram definidas no config */
+    @apply bg-bg-primary-light dark:bg-bg-primary-dark 
+           text-text-primary-light dark:text-text-primary-dark 
+           font-sans
+           transition-colors duration-300;
   }
 }
 
-@layer utilities {
-  .animate-fade-in {
-    animation: fadeIn 0.5s ease-in-out;
+@layer components {
+  /* Todas as classes personalizadas foram movidas para cá */
+  .blausight-card {
+    @apply bg-bg-secondary-light dark:bg-bg-secondary-dark 
+           rounded-2xl shadow-sm border border-border-light dark:border-border-dark 
+           p-6 sm:p-8 transition-all duration-300;
   }
 
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+  .blausight-card-header {
+    @apply flex items-center mb-4;
+  }
+
+  .blausight-card-icon {
+    @apply w-10 h-10 flex-shrink-0 mr-4 rounded-lg flex items-center justify-center 
+           bg-accent-secondary dark:bg-accent-secondary-dark 
+           text-accent-primary dark:text-blue-300;
+  }
+  
+  .blausight-card-title {
+    @apply text-xl font-bold text-text-primary-light dark:text-text-primary-dark;
+  }
+
+  .blausight-card-description {
+    @apply text-text-secondary-light dark:text-text-secondary-dark mb-6;
+  }
+
+  .blausight-button-primary {
+    @apply w-full flex justify-center items-center bg-accent-primary text-white font-bold 
+           py-3 px-4 rounded-lg hover:bg-accent-primary-hover 
+           transition duration-300 disabled:bg-opacity-50 disabled:cursor-not-allowed;
   }
 }
