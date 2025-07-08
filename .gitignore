@@ -3,3 +3,7 @@
 app/__pycache__/
 
 .env
+
+backend/uploads
+Blau.pem
+blaudev.pem
