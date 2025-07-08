@@ -1,15 +1,16 @@
 from . import db
 
 class Deviation(db.Model):
+    __tablename__ = 'deviations'
     id = db.Column(db.Integer, primary_key=True)
-    id_desvio = db.Column(db.String(50), unique=True, nullable=False)
-    data_identificacao = db.Column(db.String(50))
+    id_desvio = db.Column(db.String(100), unique=True, nullable=True)
+    data_identificacao = db.Column(db.String(50), nullable=True)
     descricao = db.Column(db.Text, nullable=False)
-    causa_raiz = db.Column(db.Text)
-    acao_corretiva = db.Column(db.Text)
-    status_acao = db.Column(db.String(50))
-    classificacao_desvio = db.Column(db.String(100))
-    keywords = db.Column(db.Text, nullable=True)
+    causa_raiz = db.Column(db.Text, nullable=True)
+    acao_corretiva = db.Column(db.Text, nullable=True)
+    status_acao = db.Column(db.String(50), nullable=True)
+    classificacao_desvio = db.Column(db.String(50), nullable=True)
+    keywords = db.Column(db.String(255), nullable=True)
 
     def to_dict(self):
         return {
@@ -21,5 +22,5 @@ class Deviation(db.Model):
             'acao_corretiva': self.acao_corretiva,
             'status_acao': self.status_acao,
             'classificacao_desvio': self.classificacao_desvio,
-            'keywords': self.keywords
+            'keywords': self.keywords,
         }

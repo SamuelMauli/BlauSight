@@ -1,51 +1,28 @@
-# backend/app/__init__.py
-
-import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 from flask_cors import CORS
-from dotenv import load_dotenv
+from flask_migrate import Migrate # 1. Importe o Migrate
+import os
 
-# Carrega as variáveis de ambiente do arquivo .env
-load_dotenv()
+from .config import Config
 
-# 1. Cria as extensões FORA da função create_app
 db = SQLAlchemy()
-migrate = Migrate()
+migrate = Migrate() # 2. Inicialize o Migrate
 
-def create_app():
-    """
-    Cria e configura uma instância da aplicação Flask.
-    Este é o padrão "Application Factory".
-    """
+def create_app(config_class=Config):
     app = Flask(__name__)
-    CORS(app, resources={r"/api/*": {"origins": os.getenv("FRONTEND_URL", "http://localhost:5173")}})
-    
-    # 2. Configura a aplicação
-    DB_USER = os.getenv('MYSQL_USER')
-    DB_PASSWORD = os.getenv('MYSQL_PASSWORD')
-    DB_HOST = os.getenv('MYSQL_HOST', 'db')
-    DB_NAME = os.getenv('MYSQL_DATABASE')
-    
-    app.config['SQLALCHEMY_DATABASE_URI'] = (
-        f'mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
-    )
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config.from_object(config_class)
 
-    # 3. Associa as extensões com a aplicação
+    CORS(app)
     db.init_app(app)
-    migrate.init_app(app, db)
+    migrate.init_app(app, db) # 3. Conecte o Migrate ao app e ao db
 
-    # 4. Importa e registra os blueprints DEPOIS que tudo foi inicializado
-    with app.app_context():
-        from . import routes  # Importação local para quebrar o ciclo
-        
-        # Opcional: Carrega o texto do checklist aqui se necessário, 
-        # mas a melhor prática é mantê-lo dentro da própria rota que o usa.
-        # Vamos deixar a lógica de carregamento dentro da rota por enquanto.
+    from .routes import bp as api_blueprint
+    app.register_blueprint(api_blueprint, url_prefix='/api')
 
-        app.register_blueprint(routes.bp, url_prefix='/api')
+    # 4. REMOVA a linha abaixo! Esta é a causa do erro.
+    # with app.app_context():
+    #     db.create_all()
 
     app.logger.info("Aplicação BlauSight criada e configurada com sucesso.")
     return app

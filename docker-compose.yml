@@ -19,10 +19,16 @@ services:
 
   backend:
     build: ./backend
+    # COMANDO CORRIGIDO: Removido 'gevent' para estabilidade e ajustado o bind.
+    command: gunicorn --workers 2 --timeout 300 --bind 0.0.0.0:5000 'app:create_app()'
     container_name: blausight-backend
     restart: always
     ports:
-      - "8000:8000"
+      # PORTA CORRIGIDA: Mapeia a porta 8000 do seu computador para a 5000 do container.
+      - "8000:5000"
+    volumes:
+      # VOLUME ADICIONADO: Sincroniza o código local com o container para desenvolvimento.
+      - ./backend:/app
     env_file:
       - .env
     depends_on:
@@ -37,6 +43,9 @@ services:
     restart: always
     ports:
       - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # Impede que o node_modules local sobrescreva o do container
     env_file:
       - .env
     depends_on:
