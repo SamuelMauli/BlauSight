@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app, Response
+from flask import Blueprint, request, jsonify, current_app, Response, send_from_directory
 from werkzeug.utils import secure_filename
 import os
 import zipfile
@@ -8,6 +8,7 @@ import logging
 import json
 import time
 from groq import Groq
+from flask import send_from_directory, make_response
 
 from .extractor import get_text_from_docx, get_text_from_pdf
 from .models import Deviation, db
@@ -15,18 +16,16 @@ from .models import Deviation, db
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s] - %(message)s')
 bp = Blueprint('api', __name__)
 ALLOWED_EXTENSIONS = {'docx', 'pdf', 'zip'}
-
-# --- Funções Auxiliares de Nível Profissional ---
+UPLOAD_FOLDER = 'uploads'
 
 def _get_groq_client():
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        current_app.logger.error("GROQ_API_KEY não foi encontrada no ambiente.")
+        current_app.logger.error("GROQ_API_KEY não encontrada no ambiente.")
         raise ValueError("A chave da API da Groq não foi configurada no servidor.")
     return Groq(api_key=api_key)
 
 def _clean_json_from_response(raw_text: str) -> dict:
-    current_app.logger.debug(f"Resposta bruta da IA recebida para limpeza: {raw_text}")
     json_start = raw_text.find('{')
     json_end = raw_text.rfind('}')
     if json_start == -1 or json_end == -1:
@@ -42,7 +41,6 @@ def _call_groq_with_retries(messages, json_mode=True, max_retries=3):
     client = _get_groq_client()
     for attempt in range(max_retries):
         try:
-            current_app.logger.info(f"Tentativa {attempt + 1}/{max_retries} de chamada à API Groq.")
             chat_completion = client.chat.completions.create(
                 messages=messages, model="llama3-70b-8192", temperature=0.1, max_tokens=8000
             )
@@ -58,130 +56,56 @@ def _call_groq_with_retries(messages, json_mode=True, max_retries=3):
     current_app.logger.critical(f"Falha CRÍTICA ao obter uma resposta válida da API Groq após {max_retries} tentativas.")
     raise Exception(f"O serviço de IA não respondeu adequadamente após {max_retries} tentativas.")
 
-# --- Rotas da Aplicação ---
 
-@bp.route('/analyze-dossier', methods=['POST'])
-def analyze_dossier():
-    if 'dossier_file' not in request.files:
-        return jsonify({"error": "Nenhum arquivo de dossiê foi enviado"}), 400
-
-    dossier_file = request.files['dossier_file']
-    if not dossier_file.filename.lower().endswith('.pdf'):
-        return jsonify({"error": "Formato de arquivo inválido. Envie um PDF."}), 400
-
-    try:
-        dossier_text = get_text_from_pdf(dossier_file)
-        if not dossier_text or len(dossier_text) < 100:
-            return jsonify({"error": "Não foi possível extrair conteúdo válido do PDF."}), 400
-        
-        is_truncated = len(dossier_text) > 15000
-        
-        system_prompt = "Você é o 'CDT Expert', um especialista em assuntos regulatórios da ANVISA com 20 anos de experiência. Sua análise deve ser implacável, precisa e detalhada, focando em não-conformidades críticas e inconsistências entre módulos."
-        
-        # O prompt agora contém o checklist detalhado extraído do documento do usuário
-        user_prompt = f"""
-        Analise o Dossiê do Usuário fornecido, utilizando o checklist de validação detalhado abaixo. Foque em identificar não-conformidades e inconsistências.
-
-        **Dossiê do Usuário (Conteúdo Parcial):**
-        ---
-        {dossier_text[:14000]} 
-        ---
-
-        **Checklist de Validação Detalhado (Baseado na ANVISA):**
-        1.  **Módulo 1 - Administrativo e Rotulagem:**
-            -   [ ] **1.2.1 Formulários de Petição (FP1/FP2):** Presença e preenchimento.
-            -   [ ] **1.2.4 Certificado de Responsabilidade Técnica:** Presença e validade.
-            -   [ ] **1.3.1 Rotulagem (Embalagem Primária e Secundária):** Presença e conformidade.
-            -   [ ] **1.5.1 Certificado de Boas Práticas de Fabricação (CBPF):** Presença, validade e escopo correto para TODOS os locais de fabricação (IFA e produto acabado).
-            -   [ ] **Validação Cruzada M1 x M3:** As 'condições de armazenamento' e 'prazo de validade' na rotulagem (M1) são idênticas às suportadas pelo estudo de estabilidade (M3)?
-            -   [ ] **Validação Cruzada M1 x M5:** As 'indicações terapêuticas' na bula (M1) são exatamente as mesmas comprovadas nos estudos clínicos de eficácia (M5)?
-
-        2.  **Módulo 3 - Qualidade (CMC):**
-            -   [ ] **3.2.S.4 Controle do IFA:** Apresentação de especificações e relatórios de validação dos métodos analíticos.
-            -   [ ] **3.2.P.8 Estabilidade do Produto Acabado:** Relatório completo, com dados de longa duração e acelerado, conforme RDC 318/2019. O protocolo está correto (condições, frequência)?
-
-        3.  **Módulo 5 - Estudos Clínicos:**
-            -   [ ] **5.3.1 Estudo de Bioequivalência (para Genéricos/Similares):** Relatório completo apresentado? A análise estatística (IC 90%) está dentro do intervalo de 80.00% a 125.00%?
-            -   [ ] **5.3.5 Estudos de Eficácia e Segurança (para Novos/Inovadores):** Apresentação de relatórios completos para Fases I, II e III?
-
-        **Sua Tarefa (Responda APENAS com o objeto JSON):**
-        Gere um relatório JSON com a estrutura abaixo. Para cada item, avalie a conformidade (is_compliant: true/false) e forneça uma justificativa curta e direta.
-
-        {{
-          "overall_summary": {{
-            "product_type_identified": "Tipo do produto (Genérico, Novo, etc.)",
-            "overall_status": "Requer Atenção Crítica, Aprovado com Ressalvas, ou Conformidade Alta",
-            "critical_findings": "Resuma em uma frase os 2-3 pontos de maior risco ou não-conformidades mais graves encontradas."
-          }},
-          "was_truncated": {str(is_truncated).lower()},
-          "modules_validation": {{
-            "module_1": [
-                {{ "item": "Formulários Administrativos (FP1/FP2, CRT)", "is_compliant": true/false, "justification": "..." }},
-                {{ "item": "Certificados de Boas Práticas de Fabricação (CBPF)", "is_compliant": true/false, "justification": "..." }},
-                {{ "item": "Validação Cruzada: Rotulagem (M1) vs Estabilidade (M3)", "is_compliant": true/false, "justification": "Ex: Inconsistente. Rotulagem informa 30°C, mas estabilidade só suporta 25°C." }}
-            ],
-            "module_3": [
-                {{ "item": "Validação de Métodos Analíticos (IFA e Produto Acabado)", "is_compliant": true/false, "justification": "..." }},
-                {{ "item": "Estudos de Estabilidade (Protocolo e Dados Completos)", "is_compliant": true/false, "justification": "Ex: Não-conforme. Ausência de dados de estudo acelerado." }}
-            ],
-            "module_5": [
-                {{ "item": "Estudo de Bioequivalência (Intervalo de Confiança 80-125%)", "is_compliant": true/false, "justification": "Ex: Não-conforme. IC 90% de 78.5%-129.0% está fora do limite aceitável." }}
-            ]
-          }}
-        }}
-        """
-
-        analysis_data = _call_groq_with_retries([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ])
-
-        return jsonify(analysis_data), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Falha crítica na rota /analyze-dossier: {e}", exc_info=True)
-        return jsonify({"error": "Ocorreu um erro interno no servidor durante a análise do dossiê."}), 500
-
-# ... (O resto das rotas - /upload, /predict, /chat, /deviations - permanecem as mesmas da versão robusta anterior) ...
 @bp.route('/upload', methods=['POST'])
 def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "Nenhum arquivo enviado."}), 400
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    if 'file' not in request.files: return jsonify({"error": "Nenhum arquivo enviado."}), 400
     
     file = request.files['file']
-    filename = secure_filename(file.filename)
-    
-    if not ('.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS):
-        return jsonify({"error": f"Tipo de arquivo '{filename.rsplit('.', 1)[1]}' não é permitido. Use {ALLOWED_EXTENSIONS}."}), 400
+    original_filename = secure_filename(file.filename)
+    if not ('.' in original_filename and original_filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS):
+        return jsonify({"error": f"Tipo de arquivo não permitido."}), 400
 
     temp_dir = tempfile.mkdtemp()
-    
     try:
-        processed_files = []
-        
-        def process_document(doc_path):
-            text_content = ""
-            try:
-                if doc_path.lower().endswith('.docx'): text_content = get_text_from_docx(doc_path)
-                elif doc_path.lower().endswith('.pdf'): text_content = get_text_from_pdf(doc_path)
-            except Exception as e:
-                current_app.logger.error(f"Falha ao extrair texto de {doc_path}: {e}")
-                return
-
+        processed_deviations = []
+        def process_and_save_document(doc_path, original_name):
+            permanent_path = os.path.join(UPLOAD_FOLDER, original_name)
+            shutil.copy(doc_path, permanent_path)
+            
+            text_content = get_text_from_docx(doc_path) if doc_path.lower().endswith('.docx') else get_text_from_pdf(doc_path)
             if not text_content:
-                logging.warning(f"Nenhum conteúdo de texto extraído de {doc_path}")
-                return
+                logging.warning(f"Nenhum texto extraído de {original_name}"); return
 
-            system_prompt = "Você é um assistente de compliance farmacêutica para extração de dados. Extraia os dados do relatório de desvio no formato JSON, conforme solicitado."
+            system_prompt = "Você é um especialista em Garantia da Qualidade farmacêutica. Sua tarefa é analisar relatórios de desvio, extrair dados-chave e gerar insights analíticos."
             user_prompt = f"""
-            Analise o relatório e extraia as informações no formato JSON com as chaves: "id_desvio", "data_identificacao", "descricao", "causa_raiz", "acao_corretiva", "status_acao", "classificacao_desvio", "potential_impact".
-            - potential_impact: Avalie o impacto potencial e retorne um dos seguintes valores: "Qualidade do Produto", "Segurança do Paciente", "Conformidade Regulatória", "Processo Interno".
-            - Se um campo não for encontrado, retorne "N/A".
-            Texto do Documento:
+            Analise o relatório de desvio contido no texto abaixo. Extraia as informações solicitadas e gere os insights analíticos em formato JSON.
+
+            **Texto do Relatório:**
             ---
             {text_content[:8000]}
             ---
-            Responda APENAS com o objeto JSON.
+
+            **Sua Tarefa (Responda APENAS com o objeto JSON):**
+            1.  **Extraia os seguintes campos do texto:** "id_desvio", "data_identificacao", "descricao", "causa_raiz", "acao_corretiva", "status_acao", "classificacao_desvio".
+                -   Se 'id_desvio' não estiver no texto, extraia o número do nome do arquivo: '{original_name}'.
+                -   Se outros campos não forem encontrados, retorne "N/A".
+            2.  **Gere Keywords Analíticas:** Crie uma lista de 5 a 7 `keywords` que capturem a essência do problema (ex: "excursão de temperatura", "falha de equipamento", "contaminação microbiológica", "erro de procedimento").
+            3.  **Forneça uma Análise da Falha:** No campo `failure_analysis`, escreva uma observação técnica curta (1-2 frases) sobre a natureza da falha. Ex: "A falha parece ser de natureza mecânica, relacionada ao desgaste de componentes de vedação, e não um erro operacional."
+
+            **Objeto JSON de Saída:**
+            {{
+                "id_desvio": "...",
+                "data_identificacao": "...",
+                "descricao": "...",
+                "causa_raiz": "...",
+                "acao_corretiva": "...",
+                "status_acao": "...",
+                "classificacao_desvio": "...",
+                "keywords": ["...", "..."],
+                "failure_analysis": "..."
+            }}
             """
             
             try:
@@ -189,45 +113,77 @@ def upload_file():
                     {"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}
                 ])
                 
-                if extracted_data.get('id_desvio') != "N/A" and db.session.query(Deviation.id).filter_by(id_desvio=extracted_data['id_desvio']).first():
-                    current_app.logger.info(f"Desvio {extracted_data['id_desvio']} já existe no banco de dados. Pulando inserção.")
-                    return
+                desvio_id = extracted_data.get('id_desvio', f"GEN_{int(time.time())}")
+                if db.session.query(Deviation.id).filter_by(id_desvio=desvio_id).first():
+                    current_app.logger.info(f"Desvio {desvio_id} já existe. Pulando."); return
+
+                keywords_list = extracted_data.get('keywords', [])
                 
-                extracted_data.pop('potential_impact', None)
-
-                new_deviation = Deviation(**extracted_data)
-                processed_files.append(new_deviation)
-
+                new_deviation = Deviation(
+                    id_desvio=desvio_id,
+                    data_identificacao=extracted_data.get('data_identificacao', 'N/A'),
+                    descricao=extracted_data.get('descricao', 'Descrição não extraída.'),
+                    causa_raiz=extracted_data.get('causa_raiz', 'Não especificada.'),
+                    acao_corretiva=extracted_data.get('acao_corretiva', 'Não especificada.'),
+                    status_acao=extracted_data.get('status_acao', 'Não especificado.'),
+                    classificacao_desvio=extracted_data.get('classificacao_desvio', 'Não classificado.'),
+                    keywords=', '.join(keywords_list) if isinstance(keywords_list, list) else '',
+                    failure_analysis=extracted_data.get('failure_analysis', 'Análise não gerada.'),
+                    file_path=permanent_path
+                )
+                processed_deviations.append(new_deviation)
             except Exception as e:
-                current_app.logger.error(f"Falha ao processar documento {doc_path} com IA: {e}")
+                current_app.logger.error(f"Falha ao processar {original_name} com IA: {e}", exc_info=True)
 
-        saved_path = os.path.join(temp_dir, filename)
-        file.save(saved_path)
+        temp_file_path = os.path.join(temp_dir, original_filename)
+        file.save(temp_file_path)
 
-        if filename.lower().endswith('.zip'):
-            with zipfile.ZipFile(saved_path, 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
-            for item in os.listdir(temp_dir):
-                item_path = os.path.join(temp_dir, item)
-                if os.path.isfile(item_path) and item.rsplit('.', 1)[1].lower() in ('docx', 'pdf'):
-                    process_document(item_path)
+        if original_filename.lower().endswith('.zip'):
+            with zipfile.ZipFile(temp_file_path, 'r') as zip_ref:
+                for member in zip_ref.namelist():
+                    if not member.startswith('__MACOSX') and member.rsplit('.', 1)[-1].lower() in ('docx', 'pdf'):
+                        unique_filename = f"{int(time.time())}_{secure_filename(os.path.basename(member))}"
+                        extracted_path = zip_ref.extract(member, temp_dir)
+                        process_and_save_document(extracted_path, unique_filename)
         else:
-            process_document(saved_path)
+            process_and_save_document(temp_file_path, original_filename)
         
-        if processed_files:
-            db.session.add_all(processed_files)
+        if processed_deviations:
+            db.session.add_all(processed_deviations)
             db.session.commit()
-            return jsonify({"message": f"{len(processed_files)} novo(s) desvio(s) processado(s) com sucesso e salvo(s)."}), 200
+            return jsonify({"message": f"{len(processed_deviations)} novo(s) desvio(s) processado(s) e salvo(s)."}), 200
         
-        return jsonify({"message": "Nenhum desvio novo foi processado. Verifique o conteúdo dos arquivos ou se eles já existem no banco."}), 200
-
-    except zipfile.BadZipFile:
-        return jsonify({"error": "O arquivo ZIP enviado está corrompido ou em formato inválido."}), 400
+        return jsonify({"message": "Nenhum desvio novo foi processado."}), 200
     except Exception as e:
         current_app.logger.error(f"Erro fatal no endpoint de upload: {e}", exc_info=True)
-        return jsonify({"error": "Ocorreu um erro inesperado e crítico no servidor."}), 500
+        return jsonify({"error": "Ocorreu um erro crítico no servidor."}), 500
     finally:
         shutil.rmtree(temp_dir)
+
+# NOVA ROTA PARA VISUALIZAR DOCUMENTOS
+@bp.route('/document/<string:desvio_id>', methods=['GET'])
+def get_document(desvio_id):
+    """
+    Serve o arquivo original para ser exibido no navegador.
+    A extensão Flask-CORS gerenciará os headers de permissão.
+    """
+    try:
+        desvio = db.session.query(Deviation).filter_by(id_desvio=desvio_id).first_or_404()
+
+        if not desvio.file_path:
+            return jsonify({"error": "Nenhum arquivo associado a este desvio."}), 404
+
+        directory = os.path.abspath(UPLOAD_FOLDER)
+        filename = os.path.basename(desvio.file_path)
+
+        if not os.path.exists(os.path.join(directory, filename)):
+             return jsonify({"error": "Arquivo físico não encontrado no servidor."}), 404
+
+        return send_from_directory(directory, filename)
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao servir documento para desvio {desvio_id}: {e}", exc_info=True)
+        return jsonify({"error": "Erro interno do servidor."}), 500
 
 @bp.route('/predict', methods=['POST'])
 def predict_with_groq():
@@ -333,3 +289,85 @@ def get_deviations():
     except Exception as e:
         current_app.logger.error(f"Erro ao buscar desvios no banco de dados: {e}", exc_info=True)
         return jsonify({"error": "Ocorreu um erro ao acessar o banco de dados."}), 500
+        
+@bp.route('/analyze-dossier', methods=['POST'])
+def analyze_dossier():
+    if 'dossier_file' not in request.files:
+        return jsonify({"error": "Nenhum arquivo de dossiê foi enviado."}), 400
+
+    dossier_file = request.files['dossier_file']
+    if not dossier_file.filename.lower().endswith('.pdf'):
+        return jsonify({"error": "Formato de arquivo inválido. Por favor, envie um arquivo PDF."}), 400
+
+    try:
+        dossier_text = get_text_from_pdf(dossier_file)
+        if not dossier_text or len(dossier_text) < 100:
+            return jsonify({"error": "Não foi possível extrair conteúdo válido do PDF enviado."}), 400
+        
+        is_truncated = len(dossier_text) > 15000
+        
+        system_prompt = "Você é o 'CDT Expert', um especialista em assuntos regulatórios da ANVISA com 20 anos de experiência. Sua análise deve ser implacável, precisa e detalhada, focando em não-conformidades críticas e inconsistências entre módulos."
+        
+        # O prompt agora contém o checklist detalhado extraído do documento do usuário
+        user_prompt = f"""
+        Analise o Dossiê do Usuário fornecido, utilizando o checklist de validação detalhado abaixo. Foque em identificar não-conformidades e inconsistências.
+
+        **Dossiê do Usuário (Conteúdo Parcial):**
+        ---
+        {dossier_text[:14000]} 
+        ---
+
+        **Checklist de Validação Detalhado (Baseado na ANVISA):**
+        1.  **Módulo 1 - Administrativo e Rotulagem:**
+            -   [ ] **1.2.1 Formulários de Petição (FP1/FP2):** Presença e preenchimento.
+            -   [ ] **1.2.4 Certificado de Responsabilidade Técnica:** Presença e validade.
+            -   [ ] **1.3.1 Rotulagem (Embalagem Primária e Secundária):** Presença e conformidade.
+            -   [ ] **1.5.1 Certificado de Boas Práticas de Fabricação (CBPF):** Presença, validade e escopo correto para TODOS os locais de fabricação (IFA e produto acabado).
+            -   [ ] **Validação Cruzada M1 x M3:** As 'condições de armazenamento' e 'prazo de validade' na rotulagem (M1) são idênticas às suportadas pelo estudo de estabilidade (M3)?
+            -   [ ] **Validação Cruzada M1 x M5:** As 'indicações terapêuticas' na bula (M1) são exatamente as mesmas comprovadas nos estudos clínicos de eficácia (M5)?
+
+        2.  **Módulo 3 - Qualidade (CMC):**
+            -   [ ] **3.2.S.4 Controle do IFA:** Apresentação de especificações e relatórios de validação dos métodos analíticos.
+            -   [ ] **3.2.P.8 Estabilidade do Produto Acabado:** Relatório completo, com dados de longa duração e acelerado, conforme RDC 318/2019. O protocolo está correto (condições, frequência)?
+
+        3.  **Módulo 5 - Estudos Clínicos:**
+            -   [ ] **5.3.1 Estudo de Bioequivalência (para Genéricos/Similares):** Relatório completo apresentado? A análise estatística (IC 90%) está dentro do intervalo de 80.00% a 125.00%?
+            -   [ ] **5.3.5 Estudos de Eficácia e Segurança (para Novos/Inovadores):** Apresentação de relatórios completos para Fases I, II e III?
+
+        **Sua Tarefa (Responda APENAS com o objeto JSON):**
+        Gere um relatório JSON com a estrutura abaixo. Para cada item, avalie a conformidade (is_compliant: true/false) e forneça uma justificativa curta e direta.
+
+        {{
+          "overall_summary": {{
+            "product_type_identified": "Tipo do produto (Genérico, Novo, etc.)",
+            "overall_status": "Requer Atenção Crítica, Aprovado com Ressalvas, ou Conformidade Alta",
+            "critical_findings": "Resuma em uma frase os 2-3 pontos de maior risco ou não-conformidades mais graves encontradas."
+          }},
+          "was_truncated": {str(is_truncated).lower()},
+          "modules_validation": {{
+            "module_1": [
+                {{ "item": "Formulários Administrativos (FP1/FP2, CRT)", "is_compliant": true/false, "justification": "..." }},
+                {{ "item": "Certificados de Boas Práticas de Fabricação (CBPF)", "is_compliant": true/false, "justification": "..." }},
+                {{ "item": "Validação Cruzada: Rotulagem (M1) vs Estabilidade (M3)", "is_compliant": true/false, "justification": "Ex: Inconsistente. Rotulagem informa 30°C, mas estabilidade só suporta 25°C." }}
+            ],
+            "module_3": [
+                {{ "item": "Validação de Métodos Analíticos (IFA e Produto Acabado)", "is_compliant": true/false, "justification": "..." }},
+                {{ "item": "Estudos de Estabilidade (Protocolo e Dados Completos)", "is_compliant": true/false, "justification": "Ex: Não-conforme. Ausência de dados de estudo acelerado." }}
+            ],
+            "module_5": [
+                {{ "item": "Estudo de Bioequivalência (Intervalo de Confiança 80-125%)", "is_compliant": true/false, "justification": "Ex: Não-conforme. IC 90% de 78.5%-129.0% está fora do limite aceitável." }}
+            ]
+          }}
+        }}
+        """
+
+        analysis_data = _call_groq_with_retries([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ])
+
+        return jsonify(analysis_data), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Falha crítica na rota /analyze-dossier: {e}", exc_info=True)
+        return jsonify({"error": "Ocorreu um erro interno no servidor durante a análise do dossiê."}), 500

@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { BrainCircuit, LoaderCircle, AlertTriangle, FileText, Search, Wrench, ShieldAlert, Zap } from 'lucide-react';
+import { BrainCircuit, LoaderCircle, AlertTriangle, FileText, Search, Wrench, ShieldAlert, Zap, X, BookOpen } from 'lucide-react';
 
 const AnalyzePage = () => {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [documentUrl, setDocumentUrl] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
 
   const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
@@ -25,7 +29,13 @@ const AnalyzePage = () => {
     }
   };
 
-  // Componente reutilizável para blocos de informação
+  const handleViewDocument = (deviationId) => {
+    const docUrl = `${API_URL}/document/${deviationId}`;
+    setDocumentUrl(docUrl);
+    setModalTitle(`Visualizando Documento do Desvio: ${deviationId}`);
+    setIsModalOpen(true);
+  };
+
   const InfoBlock = ({ icon, title, children }) => (
     <div className="bg-slate-100 dark:bg-slate-800/60 p-5 rounded-lg border border-slate-200 dark:border-slate-700">
       <div className="flex items-center mb-3">
@@ -38,7 +48,6 @@ const AnalyzePage = () => {
     </div>
   );
   
-  // Componente para exibir o nível de risco com cores
   const RiskLevel = ({ level = "Indefinido" }) => {
     const levelStyles = {
       'Crítico': 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
@@ -49,11 +58,48 @@ const AnalyzePage = () => {
     return <span className={`px-3 py-1 text-xs font-bold rounded-full ${style}`}>{level}</span>;
   };
 
+  // --- MODAL DEFINITIVO COM IFRAME ---
+  const DocumentModal = () => (
+    <div 
+      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 sm:p-6 md:p-8" 
+      onClick={() => setIsModalOpen(false)}
+    >
+      <div 
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-6xl h-[95vh] flex flex-col animate-fade-in-up" 
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+          <h3 className="font-bold text-lg text-slate-800 dark:text-slate-200 truncate pr-4">{modalTitle}</h3>
+          <button 
+            onClick={() => setIsModalOpen(false)} 
+            className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+            aria-label="Fechar modal"
+          >
+            <X size={24} />
+          </button>
+        </div>
+        <div className="p-2 bg-slate-200 dark:bg-slate-800 flex-grow h-full">
+          {documentUrl ? (
+            <iframe
+              src={documentUrl}
+              title={modalTitle}
+              className="w-full h-full border-0 rounded"
+              sandbox="allow-scripts allow-same-origin"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full"><LoaderCircle className="animate-spin text-blue-500" size={40} /></div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-8 animate-fade-in p-4 md:p-0">
-      <div className="blausight-card">
-        <div className="blausight-card-header">
+    <>
+      {isModalOpen && <DocumentModal />}
+      <div className="space-y-8 animate-fade-in p-4 md:p-0">
+        <div className="blausight-card">
+          <div className="blausight-card-header">
           <div className="blausight-card-icon"><BrainCircuit size={22} /></div>
           <h2 className="blausight-card-title">Análise Preditiva de Desvios (CAPA Inteligente)</h2>
         </div>
@@ -73,82 +119,87 @@ const AnalyzePage = () => {
             {loading ? <><LoaderCircle className="animate-spin mr-2" /> Analisando Risco e Propondo Ações...</> : 'Analisar Desvio'}
           </button>
         </form>
-      </div>
-
-      {error && (
-        <div className="p-4 rounded-lg flex items-center text-sm bg-red-100 dark:bg-red-900/50 text-danger animate-fade-in">
-          <AlertTriangle className="mr-3 flex-shrink-0" /> {error}
         </div>
-      )}
 
-      {result && (
-        <div className="blausight-card animate-fade-in">
-          <div className="blausight-card-header">
-            <div className="blausight-card-icon"><FileText size={22} /></div>
-            <h3 className="blausight-card-title">Relatório de Análise e Plano de Ação (CAPA)</h3>
+        {error && (
+          <div className="p-4 rounded-lg flex items-center text-sm bg-red-100 dark:bg-red-900/50 text-danger animate-fade-in">
+            <AlertTriangle className="mr-3 flex-shrink-0" /> {error}
           </div>
-          
-          <div className="space-y-6">
-            <InfoBlock icon={<Zap size={16} className="text-orange-500"/>} title="Avaliação de Risco">
-              <div>
-                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark mb-2">Nível de Risco Identificado:</p>
-                <RiskLevel level={result.risk_assessment?.level} />
-              </div>
-              <div>
-                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark mt-3">Justificativa:</p>
-                <p>{result.risk_assessment?.justification}</p>
-              </div>
-            </InfoBlock>
+        )}
 
-            <InfoBlock icon={<Search size={16} className="text-blue-500"/>} title="Análise de Causa Raiz (RCA)">
-              <div>
-                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Causa Provável:</p>
-                <p>{result.root_cause_analysis?.probable_cause}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark mt-3">Evidência e Raciocínio:</p>
-                <p className="italic">"{result.root_cause_analysis?.evidence}"</p>
-              </div>
-            </InfoBlock>
+        {result && (
+          <div className="blausight-card animate-fade-in">
+            <div className="blausight-card-header">
+              <div className="blausight-card-icon"><FileText size={22} /></div>
+              <h3 className="blausight-card-title">Relatório de Análise e Plano de Ação (CAPA)</h3>
+            </div>
             
-            <InfoBlock icon={<Wrench size={16} className="text-green-500"/>} title="Plano de Ação Corretiva e Preventiva">
-               <div>
-                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Ações de Contenção (Imediatas):</p>
-                <ul className="list-disc pl-5">
-                    {result.proposed_solution?.containment_actions?.map((action, index) => <li key={index}>{action}</li>)}
-                </ul>
-              </div>
-               <div className="mt-3">
-                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Ações Corretivas (Eliminar a Causa):</p>
-                 <ul className="list-disc pl-5">
-                    {result.proposed_solution?.corrective_actions?.map((action, index) => <li key={index}>{action}</li>)}
-                </ul>
-              </div>
-               <div className="mt-3">
-                <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Ações Preventivas (Evitar Recorrência):</p>
-                 <ul className="list-disc pl-5">
-                    {result.proposed_solution?.preventive_actions?.map((action, index) => <li key={index}>{action}</li>)}
-                </ul>
-              </div>
-            </InfoBlock>
-            
-            <InfoBlock icon={<ShieldAlert size={16} className="text-red-500"/>} title="Desvios Históricos Similares para Consulta">
-                <div className="flex flex-wrap gap-2">
-                    {result.similar_deviations_ids?.length > 0 ? (
-                        result.similar_deviations_ids.map((id, index) => (
-                            <span key={index} className="px-3 py-1 text-xs font-mono font-bold rounded-full bg-slate-200 dark:bg-slate-600 text-text-secondary-light dark:text-text-secondary-dark">
-                                {id}
-                            </span>
-                        ))
-                    ) : (
-                        <p>Nenhum desvio similar encontrado no histórico recente.</p>
-                    )}
+            <div className="space-y-6">
+              <InfoBlock icon={<Zap size={16} className="text-orange-500"/>} title="Avaliação de Risco">
+                <div>
+                  <p className="font-semibold text-text-primary-light dark:text-text-primary-dark mb-2">Nível de Risco Identificado:</p>
+                  <RiskLevel level={result.risk_assessment?.level} />
                 </div>
-            </InfoBlock>
+                <div>
+                  <p className="font-semibold text-text-primary-light dark:text-text-primary-dark mt-3">Justificativa:</p>
+                  <p>{result.risk_assessment?.justification}</p>
+                </div>
+              </InfoBlock>
+
+              <InfoBlock icon={<Search size={16} className="text-blue-500"/>} title="Análise de Causa Raiz (RCA)">
+                <div>
+                  <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Causa Provável:</p>
+                  <p>{result.root_cause_analysis?.probable_cause}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-text-primary-light dark:text-text-primary-dark mt-3">Evidência e Raciocínio:</p>
+                  <p className="italic">"{result.root_cause_analysis?.evidence}"</p>
+                </div>
+              </InfoBlock>
+            
+              <InfoBlock icon={<Wrench size={16} className="text-green-500"/>} title="Plano de Ação Corretiva e Preventiva">
+                <div>
+                  <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Ações de Contenção (Imediatas):</p>
+                  <ul className="list-disc pl-5">
+                      {result.proposed_solution_capa?.containment_actions?.map((action, index) => <li key={index}>{action}</li>)}
+                  </ul>
+                </div>
+                <div className="mt-3">
+                  <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Ações Corretivas (Eliminar a Causa):</p>
+                  <ul className="list-disc pl-5">
+                      {result.proposed_solution_capa?.corrective_actions?.map((action, index) => <li key={index}>{action}</li>)}
+                  </ul>
+                </div>
+                <div className="mt-3">
+                  <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">Ações Preventivas (Evitar Recorrência):</p>
+                  <ul className="list-disc pl-5">
+                      {result.proposed_solution_capa?.preventive_actions?.map((action, index) => <li key={index}>{action}</li>)}
+                  </ul>
+                </div>
+              </InfoBlock>
+              
+              <InfoBlock icon={<BookOpen size={16} className="text-indigo-500"/>} title="Desvios Históricos Similares para Consulta">
+                  <div className="flex flex-wrap gap-2">
+                      {result.similar_deviations_ids?.length > 0 ? (
+                          result.similar_deviations_ids.map((id) => (
+                              <button 
+                                key={id} 
+                                onClick={() => handleViewDocument(id)}
+                                className="px-3 py-1 text-xs font-mono font-bold rounded-full bg-slate-200 dark:bg-slate-600 text-text-secondary-light dark:text-text-secondary-dark hover:bg-blue-500 hover:text-white transition-colors"
+                              >
+                                  {id}
+                              </button>
+                          ))
+                      ) : (
+                          <p>Nenhum desvio similar encontrado no histórico recente.</p>
+                      )}
+                  </div>
+              </InfoBlock>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 };
 

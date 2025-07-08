@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bot, Send } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const ChatbotPage = () => {
   const [messages, setMessages] = useState([]);
@@ -42,9 +44,7 @@ const ChatbotPage = () => {
     try {
       const response = await fetch(`${apiUrl}/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: currentInput }),
       });
 
@@ -57,9 +57,7 @@ const ChatbotPage = () => {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
+        if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
         setMessages(prev => prev.map(msg => 
@@ -87,11 +85,24 @@ const ChatbotPage = () => {
     }
   };
 
+  // Componente para a mensagem do bot, agora com renderização de Markdown
+  const BotMessage = ({ content, isLoading, isLastMessage }) => (
+    <div className="prose prose-slate dark:prose-invert max-w-none">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {content}
+      </ReactMarkdown>
+      {/* EFEITO DE DIGITAÇÃO: Adiciona um cursor pulsante se esta for a última mensagem e ainda estiver carregando */}
+      {isLoading && isLastMessage && (
+        <span className="inline-block w-2 h-5 bg-blue-500 animate-pulse ml-1 rounded-sm" />
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-100 dark:bg-gray-900">
       <div className="flex-grow p-6 overflow-auto">
         <div className="flex flex-col space-y-4">
-          {messages.map((msg) => (
+          {messages.map((msg, index) => (
             <div key={msg.id} className={`flex items-end ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.sender === 'bot' && (
                 <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 flex-shrink-0">
@@ -99,13 +110,20 @@ const ChatbotPage = () => {
                 </div>
               )}
               <div
-                className={`px-4 py-2 rounded-lg inline-block max-w-lg whitespace-pre-wrap break-words ${
-                  msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200'
+                className={`px-4 py-2 rounded-lg inline-block max-w-2xl break-words ${
+                  msg.sender === 'user' 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-200'
                 }`}
               >
-                {msg.text}
-                {isLoading && msg.id.startsWith('bot') && msg.text === '' && (
-                  <span className="animate-pulse">...</span>
+                {msg.sender === 'bot' ? (
+                  <BotMessage 
+                    content={msg.text} 
+                    isLoading={isLoading}
+                    isLastMessage={index === messages.length - 1} 
+                  />
+                ) : (
+                  msg.text
                 )}
               </div>
             </div>
@@ -126,7 +144,7 @@ const ChatbotPage = () => {
           />
           <button
             onClick={handleSend}
-            className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-300 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed"
             disabled={isLoading}
           >
             <Send size={20} />
